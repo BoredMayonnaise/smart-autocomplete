@@ -1,0 +1,92 @@
+"""Focused UI refinement checks against an isolated local server."""
+import os
+from playwright.sync_api import sync_playwright, expect
+
+BASE = os.environ.get("SMART_URL", "http://127.0.0.1:8082")
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=True)
+    page = browser.new_page(viewport={"width":1440,"height":1000})
+    page.goto(BASE)
+    page.wait_for_load_state("networkidle")
+    expect(page.locator("#scrub")).to_be_enabled()
+    assert page.locator(".engine-note").count()==0
+
+    expect(page.locator("#operation")).to_have_text("Ready to replay")
+    expect(page.locator("#step-number")).to_have_text("00")
+    expect(page.locator(".input-rail #run")).to_be_visible()
+    assert page.locator("header").count()==0
+    assert page.locator("#canvas").evaluate("node => node.scrollHeight <= node.clientHeight+5"), "Focused trie fits vertically, including its root"
+    page.screenshot(path="/tmp/opencode/smart-ui-after-trie.png",full_page=True)
+    expect(page.locator("#graph-context")).to_be_visible()
+    initial_nodes=page.locator("#canvas circle.node").count()
+    page.locator("#graph-context").click()
+    assert page.locator("#canvas circle.node").count()>initial_nodes
+    page.locator("#graph-context").click()
+    expect(page.locator("#trace-status")).to_have_text("Ready")
+    page.get_by_role("button",name="Step",exact=True).click()
+    expect(page.locator("#trace-status")).to_have_text("Paused")
+    expect(page.locator("#step-number")).to_have_text("01")
+    expect(page.locator("#step-card")).to_have_attribute("data-state","active")
+    page.locator("#scrub").evaluate("node => {node.value=node.max;node.dispatchEvent(new Event('input'));}")
+    expect(page.locator("#operation")).to_have_text("Lookup complete")
+    expect(page.locator("#step-card")).to_have_attribute("data-state","complete")
+    expect(page.locator("#step-outcome")).to_have_text("Complete")
+    page.locator("#restart").click()
+    expect(page.locator("#step-number")).to_have_text("00")
+    expect(page.locator("#step-card")).to_have_attribute("data-state","ready")
+    page.keyboard.press("Escape")
+    page.locator("#editor").fill("algorithmic")
+    page.locator("#run").click()
+    expect(page.locator("#scrub")).to_be_enabled()
+    page.locator("#scrub").evaluate("node => {node.value=node.max;node.dispatchEvent(new Event('input'));}")
+    expect(page.locator("#detail")).to_contain_text("1 suggestion is ready")
+    page.locator("#editor").fill("zzzzzzzz")
+    page.locator("#run").click()
+    expect(page.locator("#scrub")).to_be_enabled()
+    page.locator("#scrub").evaluate("node => {node.value=node.max;node.dispatchEvent(new Event('input'));}")
+    expect(page.locator("#operation")).to_have_text("Prefix not found")
+    expect(page.locator("#step-card")).to_have_attribute("data-state","missing")
+    page.locator("#example").select_option("insert")
+    expect(page.locator("#scene-title")).to_contain_text("Levenshtein")
+    expect(page.locator("#scrub")).to_be_enabled()
+    page.locator("#scrub").evaluate("node => {node.value=node.max;node.dispatchEvent(new Event('input'));}")
+    expect(page.locator("#result-summary")).to_contain_text("Distance 1")
+    expect(page.locator("#trace-status")).to_have_text("Complete")
+    expect(page.locator("#operation")).to_have_text("Distance calculated")
+    busy=[]
+    def fail_trace(route):
+        busy.append(page.locator('#run').get_attribute('aria-busy'))
+        route.fulfill(status=503,content_type='application/json',body='{"error":{"message":"Test engine unavailable"}}')
+    page.route('**/api/trace',fail_trace)
+    page.locator('#run').click()
+    expect(page.locator('#notice')).to_contain_text('Test engine unavailable')
+    assert busy==['true']
+    expect(page.locator('#run')).to_be_enabled()
+    expect(page.locator('#scrub')).to_be_disabled()
+    expect(page.locator('#step-card')).to_have_attribute('data-state','ready')
+    expect(page.locator('#step-number')).to_have_text('00')
+    expect(page.locator('#source')).to_have_value('programing')
+    page.unroute('**/api/trace',fail_trace)
+    page.locator('#run').focus()
+    page.keyboard.press('Enter')
+    expect(page.locator('#scrub')).to_be_enabled()
+    page.locator("#editor").fill("Keep this draft, please.")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    expect(page.locator("#editor")).to_have_value("Keep this draft, please.")
+    expect(page.locator('[data-mode="dp"]')).to_have_attribute("aria-pressed","true")
+    page.screenshot(path="/tmp/opencode/smart-ui-after-desktop.png",full_page=True)
+    for width,height in [(375,812),(390,844),(844,390),(1024,768)]:
+        page.set_viewport_size({"width":width,"height":height})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),(width,height,"page overflow")
+        for selector in ["#run","#play","#step","#restart","#example"]:
+            assert page.locator(selector).bounding_box()["height"]>=36,(selector,"small control")
+    page.emulate_media(reduced_motion="reduce")
+    assert page.locator("#run").evaluate("node => getComputedStyle(node).transitionDuration") in ["0s","0.01ms"]
+    page.set_viewport_size({"width":390,"height":844})
+    page.screenshot(path="/tmp/opencode/smart-ui-after-mobile.png",full_page=True)
+    page.set_viewport_size({"width":1440,"height":1000})
+    page.evaluate("document.documentElement.style.zoom='2'")
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'No page-wide overflow at 200% CSS zoom'
+    browser.close()
+print("UI refinement checks passed")

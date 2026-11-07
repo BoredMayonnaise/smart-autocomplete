@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SmartAutocomplete</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="static/style.css">
+  <script src="static/app.js" defer></script>
+</head>
+<body>
+<main>
+  <h1 class="sr-only">Algorithm editor</h1>
+  <nav class="toolbar" aria-label="Algorithm modes">
+    <div class="tabs">
+      <button data-mode="trie" aria-pressed="true"><span>Autocomplete</span><small>Trie</small></button>
+      <button data-mode="dp" aria-pressed="false"><span>Spelling</span><small>Levenshtein</small></button>
+      <button data-mode="kmp" aria-pressed="false"><span>Find</span><small>KMP</small></button>
+    </div>
+    <div class="toolbar-side"></div>
+  </nav>
+  <div id="notice" role="alert" hidden></div>
+  <div class="workspace">
+    <aside class="input-rail">
+      <div class="rail-heading"><h2>Text editor</h2><span id="token-status" class="badge">Ready</span></div>
+      <div class="editor-field">
+        <label for="editor" class="sr-only">Editor</label>
+        <div class="editor-wrap">
+          <pre id="highlights" aria-hidden="true"></pre>
+          <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type a word or sentence…">algor</textarea>
+        </div>
+        <div class="input-meta"><span id="active-token" title="Active token and UTF-16 replacement range">—</span></div>
+      </div>
+      <div class="mode-fields" data-fields="dp" hidden>
+        <label for="source">Source</label><input id="source" value="programing" spellcheck="false">
+        <label for="target">Target</label><input id="target" value="programming" spellcheck="false">
+      </div>
+      <div class="mode-fields" data-fields="kmp" hidden>
+        <label for="pattern">Find pattern</label><input id="pattern" value="ana" spellcheck="false">
+        <div class="find-controls"><button id="previous" aria-label="Previous match">‹</button><span id="find-count">0 matches</span><button id="next" aria-label="Next match">›</button></div>
+        <span class="micro">Case-sensitive · overlaps included</span>
+      </div>
+      <button id="run" class="run">Visualize <span aria-hidden="true">↗</span></button>
+      <div class="suggestion-area">
+        <div class="result-heading"><h3>Completions</h3><span id="completion-count">0</span></div>
+        <div id="completions" class="suggestions" aria-label="Completions"></div>
+        <div class="result-heading correction-heading"><h3>Corrections</h3><label class="threshold-label"><span class="threshold-name">Distance</span><span class="threshold-short" aria-hidden="true">≤</span><select id="threshold" aria-label="Edit threshold"><option>1</option><option selected>2</option><option>3</option></select></label></div>
+        <div id="corrections" class="suggestions" aria-label="Corrections"></div>
+        <div id="analysis-metrics" class="micro" aria-label="Suggestion measurements"></div>
+      </div>
+      <div class="rail-foot"><span class="keys"><kbd>↑</kbd> <kbd>↓</kbd> select <kbd>Tab</kbd> accept</span></div>
+    </aside>
+    <section class="stage" aria-label="Algorithm visualization">
+      <div class="stage-head">
+        <div class="stage-title">
+          <h2 id="scene-title">Trie · prefix lookup</h2>
+          <p id="complexity" class="stage-complexity">Expected O(L) lookup · O(k) copy</p>
+        </div>
+        <div class="switch" aria-label="Visualization view"><button data-view="structure" aria-pressed="true">Structure</button><button data-view="flow" aria-pressed="false">Flow</button><button data-view="split" aria-pressed="false">Split</button></div>
+      </div>
+      <div class="stage-tools">
+        <label for="example" class="sr-only">Presentation example</label>
+        <select id="example"><option value="">Try an example</option><optgroup label="Autocomplete"><option value="prefix">algor · prefix lookup</option></optgroup><optgroup label="Spelling"><option value="insert">programing → programming</option><option value="transpose">recieve → receive</option><option value="distance">kitten → sitting</option></optgroup><optgroup label="Find"><option value="overlap">banana · overlapping matches</option><option value="stress">aaaaab · KMP vs naive</option></optgroup></select>
+        <button id="graph-context" aria-pressed="false">Show branches</button>
+        <div id="state-strip" class="state-strip" aria-live="polite" aria-label="Live algorithm state"></div>
+      </div>
+      <div id="canvas" class="canvas" tabindex="0" role="region" aria-label="Scrollable algorithm structure"><div class="empty">Choose an input and visualize.</div></div>
+    </section>
+    <aside class="execution-rail" aria-labelledby="execution-title">
+      <div class="execution-heading"><h2 id="execution-title">Execution</h2><span id="trace-status" class="trace-status" role="status">Ready</span></div>
+      <div class="playback">
+        <div class="transport">
+          <button id="play" disabled>▶ Play</button><button id="step" disabled>Step</button><button id="restart" disabled>Restart</button>
+        </div>
+        <div class="scrub-wrap">
+          <input id="scrub" type="range" min="0" max="0" value="0" aria-label="Trace progress" disabled>
+          <div id="ticks" class="ticks" aria-hidden="true"></div>
+        </div>
+        <div class="playback-meta">
+          <span id="progress-label">0 / 0</span>
+          <label class="speed-label" for="speed">Speed <select id="speed" aria-label="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        </div>
+      </div>
+      <div class="execution-content" tabindex="0" role="region" aria-label="Execution details and metrics">
+        <section id="step-card" class="panel now-panel" data-state="ready" aria-labelledby="operation">
+          <div class="step-heading">
+            <span id="step-number" class="step-number" aria-hidden="true">00</span>
+            <div class="step-title"><div id="step-phase" class="panel-label">Prefix lookup</div><h3 id="operation" class="operation">Ready to explore</h3></div>
+          </div>
+          <div id="detail" class="detail" tabindex="0" role="region" aria-label="Current step details">Awaiting first event</div>
+          <div class="step-footer"><span id="step-position">No trace yet</span><span id="step-outcome">Ready</span></div>
+        </section>
+        <section class="panel result-panel">
+          <div class="panel-label">Result</div>
+          <div id="result-summary" class="result-summary" tabindex="0" role="region" aria-label="Trace result" aria-live="polite">No output yet</div>
+        </section>
+        <section class="panel metrics-panel">
+          <div class="panel-label">Measurements</div>
+          <div id="analytics" class="analytics" aria-label="Algorithm analytics"></div>
+        </section>
+        <details class="metric-notes"><summary>Counting rules</summary><p id="metric-terms"></p></details>
+      </div>
+      <div class="legend"><span><i class="visited"></i>Visited / computed</span><span><i class="terminal"></i>Terminal / match</span><span><i class="current"></i>Current / edit</span><span><i class="mismatch"></i>Missing / mismatch</span></div>
+    </aside>
+  </div>
+</main>
+
+</body>
+</html>
