@@ -10,10 +10,12 @@ namespace {
 struct Boundary {
     struct context {};
     unsigned port=8080;
+    std::string public_host;
     void before_handle(crow::request& request,crow::response& response,context&) {
         const auto& host=request.get_header_value("Host");
         const auto& origin=request.get_header_value("Origin");
-        bool allowed=host.rfind("127.0.0.1:",0)==0 || host.rfind("localhost:",0)==0;
+        bool allowed=host.rfind("127.0.0.1:",0)==0 || host.rfind("localhost:",0)==0 ||
+            (!public_host.empty() && (host==public_host || host==public_host+":"+std::to_string(port)));
         if(!allowed || (!origin.empty() && origin!="http://"+host)) {
             response.code=403;response.body=R"({"error":{"code":"origin","message":"Use the local application origin"}})";response.end();return;
         }
@@ -38,7 +40,7 @@ std::string read_file(const std::filesystem::path& path) {
 int main(int argc,char** argv) {
     try {
         std::filesystem::path root=SMART_SOURCE_DIR;
-        unsigned port=8080;std::string host="127.0.0.1";smart::Limits limits;
+        unsigned port=8080;std::string host="127.0.0.1",public_host;smart::Limits limits;
         for(int i=1;i<argc;++i) {
             std::string option=argv[i];
             if(option=="--help") {std::cout<<"smartautocomplete [--root PATH] [--port 8080] [--max-words N] [--max-text N] [--max-pattern N] [--max-events N] [--max-body N] [--max-trace-bytes N]\n";return 0;}
@@ -46,6 +48,7 @@ int main(int argc,char** argv) {
             std::string value=argv[++i];
             if(option=="--root") {root=value;continue;}
             if(option=="--host") {host=value;continue;}
+            if(option=="--public-host") {public_host=value;continue;}
             std::size_t consumed=0;auto number=std::stoull(value,&consumed);
             if(consumed!=value.size() || number==0 || value.front()=='-') throw std::runtime_error("Expected positive integer for "+option);
             if(option=="--port") {if(number>65535) throw std::runtime_error("Invalid port");port=static_cast<unsigned>(number);}
@@ -65,7 +68,7 @@ int main(int argc,char** argv) {
         files["style.css"]={read_file(root/"static/style.css"),"text/css; charset=utf-8"};
         files["app.js"]={read_file(root/"static/app.js"),"application/javascript; charset=utf-8"};
         crow::App<Boundary> app;
-        app.get_middleware<Boundary>().port=port;
+        app.get_middleware<Boundary>().port=port;app.get_middleware<Boundary>().public_host=public_host;
         auto asset=[&](const std::string& key) {
             auto it=files.find(key);
             if(it==files.end()) return crow::response(404);

@@ -21,4 +21,4 @@ COPY --from=build /src/static /app/static
 COPY --from=build /src/data /app/data
 
 EXPOSE 8080
-CMD ["/app/smartautocomplete", "--root", "/app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/app/smartautocomplete", "--root", "/app", "--host", "0.0.0.0", "--port", "8080", "--public-host", "zug-ddz.duckdns.org"]
