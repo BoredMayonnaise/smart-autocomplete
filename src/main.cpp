@@ -16,7 +16,8 @@ struct Boundary {
         const auto& origin=request.get_header_value("Origin");
         bool allowed=host.rfind("127.0.0.1:",0)==0 || host.rfind("localhost:",0)==0 ||
             (!public_host.empty() && (host==public_host || host==public_host+":"+std::to_string(port)));
-        if(!allowed || (!origin.empty() && origin!="http://"+host)) {
+        bool origin_ok=origin.empty() || origin=="http://"+host || origin=="https://"+host;
+        if(!allowed || !origin_ok) {
             response.code=403;response.body=R"({"error":{"code":"origin","message":"Use the local application origin"}})";response.end();return;
         }
         if((request.method==crow::HTTPMethod::Post || request.method==crow::HTTPMethod::Put) && request.get_header_value("Content-Type").find("application/json")!=0) {
